@@ -1,5 +1,4 @@
 
-
 class View:
 
     """ The purpose of the view is to compose the responses
@@ -12,3 +11,8 @@ class View:
         return f"Hello, {username}! My name is NutrioBot and my role is to provide you with " \
                f"nutritional information, give you healthy recipes and keep track of food-related reminders!"
 
+
+    def compose_nutritional_information_request_message(self):
+        return "What product would you like to know the nutritional value of? (please write it in the format" \
+               "quantity, measure, food, e.g. 1 cup cooked rice) You will recieve back information such as " \
+               "calories, macronutrients and allergens. "

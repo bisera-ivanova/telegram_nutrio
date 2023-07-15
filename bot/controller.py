@@ -11,8 +11,8 @@ class Controller:
     def handle_start_command(self, update, context):
         return view.compose_start_message(update.message.chat.username)
 
-    def handle_set_reminders_command(self, update, context):
-        pass
+    def handle_request_nutritional_information(self, update, context):
+        return view.compose_nutritional_information_request_message()
 
     def handle_commands(self):
         pass
