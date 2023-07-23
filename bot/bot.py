@@ -1,4 +1,4 @@
-import logging
+from telegram_nutrio.Model.logger import Logger
 import os
 
 from dotenv import load_dotenv
@@ -11,82 +11,113 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from controller import Controller
+from . import controller
 
 # Credentials
-load_dotenv('../Model/credentials.env')
+load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'Model', 'credentials.env')))
 TELEGRAM_API_KEY = os.getenv('TELEGRAM_API_KEY')
 
 # Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
+logging = Logger("__name__")
+logging.create_handler()
 
-CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(3)
-
-# Instantiate the Controller
-controller = Controller()
-
-reply_keyboard = [["Nutritional information", "Recipes"]]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+# Instantiating the variables used for the different states of the conversation
+CHOOSING, TYPING_REPLY_NUTRITIONAL_INFORMATION, TYPING_REPLY_RECIPE = range(3)
 
 
-# Command handler to handle the /start command
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(controller.handle_start_command(update, context),
-                                    reply_markup=markup)
-    return CHOOSING
+class Bot:
+    _instance = None
 
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.__initialized = False
+        return cls._instance
 
-async def handle_nutritional_information_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(controller.handle_request_nutritional_information_command(update, context))
-    return TYPING_REPLY
+    def __init__(self):
+        self.controller = controller.Controller()
+        self.reply_keyboard = [["Nutritional information", "Recipes"]]
+        self.markup = ReplyKeyboardMarkup(self.reply_keyboard, one_time_keyboard=True)
+        if self.__initialized:
+            return
+        self.__initialized = True
 
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text(self.controller.handle_start_command(update),
+                                        reply_markup=self.markup), \
+            logging.log_user_message(update)
+        return CHOOSING
 
-async def respond_to_nutritional_information_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(controller.handle_user_input_nutritional_information(update, context),
-                                    reply_markup=markup)
-    return CHOOSING
+    async def handle_nutritional_information_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logging.log_user_message(update)
+        await update.message.reply_text(self.controller.handle_request_nutritional_information_command()),
+        return TYPING_REPLY_NUTRITIONAL_INFORMATION
 
+    async def respond_to_nutritional_information_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logging.log_user_message(update)
+        await update.message.reply_text(self.controller.handle_user_input_nutritional_information(update),
+                                        reply_markup=self.markup),
+        return CHOOSING
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text(
-        'Bye', reply_markup=ReplyKeyboardRemove()
-    )
-    return ConversationHandler.END
+    async def handle_recipe_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logging.log_user_message(update)
+        await update.message.reply_text(self.controller.handle_request_recipe_command()),
+        return TYPING_REPLY_RECIPE
 
+    async def respond_to_recipe_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logging.log_user_message(update)
+        await update.message.reply_text(self.controller.handle_recipe_request(update),
+                                        reply_markup=self.markup)
+        return CHOOSING
 
-# Error handler
-async def error(update, context):
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        logging.log_user_message(update)
+        await update.message.reply_text(
+            self.controller.handle_cancel_message(), reply_markup=ReplyKeyboardRemove()
+        )
+        return ConversationHandler.END
+
+    # Error handler
+    async def error(self, update, context):
+        logging.logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
 def main():
-    print("Starting bot")
+    bot = Bot()
+    logging.logger.info("Starting bot")
     app = Application.builder().token(TELEGRAM_API_KEY).build()
     nutritional_information_conversation_handler = ConversationHandler(
-        entry_points=[(CommandHandler("start", start))],
+        entry_points=[(CommandHandler("start", bot.start))],
         states={
             CHOOSING: [MessageHandler(filters.Regex("^(Nutritional information)$"),
-                                      handle_nutritional_information_request)],
-            TYPING_REPLY: [
+                                      bot.handle_nutritional_information_request),
+                       MessageHandler(filters.Regex("^(Recipes)$"),
+                                      bot.handle_recipe_request)],
+
+            TYPING_REPLY_NUTRITIONAL_INFORMATION: [
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
-                    respond_to_nutritional_information_request,
+                    bot.respond_to_nutritional_information_request,
                 )
+
+            ],
+            TYPING_REPLY_RECIPE: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    bot.respond_to_recipe_request,
+                )
+
             ],
 
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", bot.cancel)]
 
     )
 
-    logger.info("Bot started. Press Ctrl+C to stop.")
+    logging.logger.info("Bot started. Press Ctrl+C to stop.")
     app.add_handler(nutritional_information_conversation_handler)
-    app.add_error_handler(error)
-    print("Polling bot")
+    app.add_error_handler(bot.error)
+    logging.logger.info("Polling bot")
     app.run_polling(poll_interval=3)
 
 
