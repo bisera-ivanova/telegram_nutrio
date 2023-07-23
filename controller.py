@@ -1,5 +1,5 @@
-from telegram_nutrio.Model.edamam_API_connection import EdamameConnector
-from . import view
+from Model.edamam_API_connection import EdamameConnector
+import view
 
 
 class Controller:

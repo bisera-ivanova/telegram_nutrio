@@ -1,4 +1,6 @@
-from telegram_nutrio.Model.logger import Logger
+from Model.logger import Logger
+
+import Model
 import os
 
 from dotenv import load_dotenv
@@ -11,10 +13,10 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from . import controller
+import controller
 
 # Credentials
-load_dotenv(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'Model', 'credentials.env')))
+load_dotenv("Model/credentials.env")
 TELEGRAM_API_KEY = os.getenv('TELEGRAM_API_KEY')
 
 # Enable logging
